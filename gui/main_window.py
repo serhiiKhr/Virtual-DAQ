@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog
+import random
 
 from .modals import SettingsModal
 """
@@ -35,6 +36,11 @@ class MainWindow(tk.Tk):
         self.ip = tk.StringVar(value='192.168.0.1')
         self.port = tk.StringVar(value='4200')
         self.delay = tk.StringVar(value='5')
+        self.status_var = tk.StringVar(value="Ready")
+        
+        self.start_state = False
+        self.pause_state = False
+        self.stop_state = False
         
         self.build_ui()
         
@@ -44,7 +50,6 @@ class MainWindow(tk.Tk):
         
         # Main content
         self._build_form()
-        
         self._build_controls()
         self._build_progressbar()
         self._build_statusbar()
@@ -131,13 +136,41 @@ class MainWindow(tk.Tk):
         # , textvariable=tk.StringVar(value="Hello, world!")
         
     def _build_controls(self):
-        print('build controls')
+        self.controls_frame = ttk.Frame(self)
+        self.controls_frame.pack(pady=10, padx=10, fill="x")
+
+        # Start button
+        self.start_control = ttk.Button(self.controls_frame, text="▶ Start", command=lambda: self._on_control_click('start'))
+        self.start_control.grid(row=0, column=0, padx=5)
+
+        # Pause button (initially disabled)
+        self.pause_control = ttk.Button(self.controls_frame, text="⏸ Pause", command=lambda: self._on_control_click('pause'), state="disabled")
+        self.pause_control.grid(row=0, column=1, padx=5)
+
+        # Stop button
+        self.stop_control = ttk.Button(self.controls_frame, text="⏹ Stop", command=lambda: self._on_control_click('stop'), state="disabled")
+        self.stop_control.grid(row=0, column=2, padx=5)
         
     def _build_progressbar(self):
-        print('build progressbar')
+        self.progress_frame = ttk.Frame(self)
+        self.progress_frame.pack(fill="x", padx=10, pady=(10, 0))
+
+        self.progress_var = tk.DoubleVar(value=0)
+
+        self.progressbar = ttk.Progressbar(
+            self.progress_frame,
+            variable=self.progress_var,
+            maximum=100,
+            mode="determinate"
+        )
+        self.progressbar.pack(fill="x")
         
     def _build_statusbar(self):
-        print('buid; statusbar')
+        status_bar_frame = ttk.Frame(self)
+        status_bar_frame.pack(fill="x", padx=10, pady=(10, 0))
+        
+        self.statusbar = ttk.Label(status_bar_frame, textvariable=self.status_var, relief="sunken", anchor="w")
+        self.statusbar.pack(side="bottom", fill="x")
         
     def _choose_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Data Files", "*.dxd *.mera")])
@@ -173,6 +206,84 @@ class MainWindow(tk.Tk):
             self.port_label.grid()
             self.port_entry.grid()
             
+    def _update_progress(self, percent):
+        self.progress_var.set(percent)
+        self.update_idletasks() 
+        
+    def _on_control_click(self, action_type):
+        # Reset all flags
+        self.start_state = False
+        self.pause_state = False
+        self.stop_state = False
+
+        # Set the selected action flag
+        if action_type == 'start':
+            self.start_state = True
+            self._start()
+        elif action_type == 'pause':
+            self.pause_state = True
+            self._pause()
+        elif action_type == 'stop':
+            self.stop_state = True
+            self._stop()
+
+        # Update control buttons
+        self._update_controls_state()
+        
+    def _update_controls_state(self):
+        # Disable/enable buttons based on current state
+        if self.start_state:
+            self.start_control.config(state="disabled")
+            self.pause_control.config(state="normal")
+            self.stop_control.config(state="normal")
+        elif self.pause_state:
+            self.start_control.config(state="normal")
+            self.pause_control.config(state="disabled")
+            self.stop_control.config(state="normal")
+        elif self.stop_state:
+            self.start_control.config(state="normal")
+            self.pause_control.config(state="disabled")
+            self.stop_control.config(state="disabled")
+        else:
+            self.start_control.config(state="normal")
+            self.pause_control.config(state="disabled")
+            self.stop_control.config(state="disabled")
+            
+    def _start(self):
+        self._update_status('Start')
+        def loop():
+            if not self.start_state or self.pause_state or self.stop_state:
+                return
+            current = self.progress_var.get()
+            increment = random.uniform(0.01, 1.0)
+            new_value = current + increment
+            if new_value > 100:
+                self._on_control_click('stop')
+                self._update_status('Completed')
+                new_value = 0
+                
+            self.progress_var.set(new_value)
+            try:
+                delay = float(self.delay.get())
+            except ValueError:
+                delay = 5.0
+
+            self.after(int(delay), loop)
+            
+        loop()
+            
+    
+    def _pause(self):
+        self._update_status('Paused')
+    
+    def _stop(self):
+        self._update_status('Stopped')
+        self.progress_var.set(0)
+            
+    def _update_status(self, message):
+        self.status_var.set(message)
+        self.statusbar.update_idletasks()
+    
     def _validate_float(self, new_value: str) -> bool:
         if new_value == "":
             return True
@@ -206,3 +317,5 @@ class MainWindow(tk.Tk):
         return value.isdigit()
         
         
+      
+    
