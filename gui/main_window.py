@@ -26,7 +26,10 @@ class MainWindow(tk.Tk):
         super().__init__()
         
         self.title("COM Port File Emulator")
-        self.geometry("600x400")
+        width = 315
+        height = 400
+        self.geometry(f"{width}x{height}")
+        self.resizable(False, False)
         
         self.selected_file = None  # file path
         
