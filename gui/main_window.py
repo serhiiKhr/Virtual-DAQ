@@ -2,7 +2,9 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 import random
 
+from reader import upload_file
 from .modals import SettingsModal
+
 """
 +---------------------------------------------+
 |                               [⚙ Settings] |
@@ -176,15 +178,15 @@ class MainWindow(tk.Tk):
         self.statusbar.pack(side="bottom", fill="x")
         
     def _choose_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Data Files", "*.dxd *.mera")])
-        if file_path:
-            print(f"Selected file: {file_path}")
-            self.selected_file = file_path
-            self._update_form_fields()
+        self.reader = upload_file()
+        if not self.reader:
+            return
+        self._update_form_fields()
             
     def _update_form_fields(self, event=None):
-        if self.selected_file:
-            filename = self.selected_file.split("/")[-1]
+        if self.reader:
+            filepath = self.reader.filepath 
+            filename = filepath.split("/")[-1]
             self.file_label.config(text=filename)
             
         method = self.method.get()
@@ -222,16 +224,21 @@ class MainWindow(tk.Tk):
         # Set the selected action flag
         if action_type == 'start':
             self.start_state = True
+            # Update control buttons
+            self._update_controls_state()
             self._start()
+            
         elif action_type == 'pause':
             self.pause_state = True
+            # Update control buttons
+            self._update_controls_state()
             self._pause()
         elif action_type == 'stop':
             self.stop_state = True
+            # Update control buttons
+            self._update_controls_state()
             self._stop()
-
-        # Update control buttons
-        self._update_controls_state()
+        
         
     def _update_controls_state(self):
         # Disable/enable buttons based on current state
@@ -253,27 +260,38 @@ class MainWindow(tk.Tk):
             self.stop_control.config(state="disabled")
             
     def _start(self):
+        if not self.reader:
+            self._on_control_click('stop')
+            self._update_status('Error: self.reader is not set')
+            return
+        
         self._update_status('Start')
-        def loop():
-            if not self.start_state or self.pause_state or self.stop_state:
-                return
-            current = self.progress_var.get()
-            increment = random.uniform(0.01, 1.0)
-            new_value = current + increment
-            if new_value > 100:
-                self._on_control_click('stop')
-                self._update_status('Completed')
-                new_value = 0
-                
-            self.progress_var.set(new_value)
-            try:
-                delay = float(self.delay.get())
-            except ValueError:
-                delay = 5.0
-
-            self.after(int(delay), loop)
+        current = self.progress_var.get()
+        print('current', current)
+        total = self.reader.get_duration()
+        print('total', total)
+        sampling_rate = self.reader.get_sampling_rate()
+        delay = float(self.delay.get())
+        delay_sec = delay / 1000.0
+        
+        chunk_size = int(sampling_rate * delay_sec)
+        for index, chunk in enumerate(self.reader.data_generator(chunk_size=chunk_size)):
+            if self.stop_state:
+                self.progress_var.set(0)
+                break
             
-        loop()
+            if self.pause_state:
+                break
+        
+            percent = ((current + delay_sec * index) / total) * 100
+            self.progress_var.set(percent)
+            self.progressbar.update()
+            
+        if not self.pause_state and not self.stop_state:
+            self._on_control_click('stop')
+            self._update_status('Completed')
+
+       
             
     
     def _pause(self):
