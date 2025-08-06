@@ -34,6 +34,7 @@ class MainWindow(tk.Tk):
         self.geometry(f"{width}x{height}")
         self.resizable(False, False)
         
+        self.reader = None
         self.selected_file = None  # file path
         
         self.method = tk.StringVar(value="Serial")
@@ -76,8 +77,11 @@ class MainWindow(tk.Tk):
         if self.plot_modal:
             print('plot modal instance already exist')
             return
-        
-        self.plot_modal = PlotModal(self, self.port_listener)
+        filename = ''
+        if self.reader:
+            filepath = self.reader.filepath 
+            filename = filepath.split("/")[-1]
+        self.plot_modal = PlotModal(self, title=filename)
         
     def _build_navbar(self):
         navbar = ttk.Frame(self)
@@ -104,7 +108,7 @@ class MainWindow(tk.Tk):
         ttk.Label(self.form_frame, text="Method:", width=LABEL_WIDTH, anchor="e").grid(row=0, column=0, padx=5, pady=5)
         method_cb = ttk.Combobox(self.form_frame, textvariable=self.method, values=METHODS, width=ENTRY_WIDTH, state="readonly")
         method_cb.grid(row=0, column=1, padx=5, pady=5, sticky="w")
-        method_cb.bind("<<ComboboxSelected>>", lambda e: self._update_form_fields())
+        method_cb.bind("<<ComboboxSelected>>", lambda e, s=self: s._update_form_fields())
 
         # File selection
         ttk.Label(self.form_frame, text="File:", width=LABEL_WIDTH, anchor="e").grid(row=1, column=0, padx=5, pady=5)
@@ -199,7 +203,7 @@ class MainWindow(tk.Tk):
             return
         self._update_form_fields()
             
-    def _update_form_fields(self, event=None):
+    def _update_form_fields(self):
         if self.reader:
             filepath = self.reader.filepath 
             filename = filepath.split("/")[-1]
@@ -309,6 +313,7 @@ class MainWindow(tk.Tk):
         
             percent = ((self._current_index + i) * delay_sec / total) * 100
             # SEND_DATA_METHOD(chunk)
+            self.plot_modal.update_data(chunk)
             self.progress_var.set(percent)
             self.progressbar.update()
             
@@ -329,7 +334,7 @@ class MainWindow(tk.Tk):
         self.port_listener.stop()
         self.port_listener = None
         if self.plot_modal is not None:
-            self.plot_modal.destroy()
+            self.plot_modal.close()
             self.plot_modal = None
         
             
