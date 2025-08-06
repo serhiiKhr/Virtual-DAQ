@@ -3,7 +3,8 @@ from tkinter import ttk, filedialog
 import random
 
 from reader import upload_file
-from .modals import SettingsModal
+from .modals import SettingsModal, PlotModal
+from ports import FakePortListener
 
 """
 +---------------------------------------------+
@@ -49,6 +50,8 @@ class MainWindow(tk.Tk):
         
         self._current_index = 0
         
+        self.port_listener = None
+        self.plot_modal = None
         self.build_ui()
         
     def build_ui(self):
@@ -64,6 +67,17 @@ class MainWindow(tk.Tk):
         
     def open_settings_modal(self):
         SettingsModal(self)
+        
+    def open_plot_modal(self):
+        if not self.port_listener:
+            print("plot listener is couldn't be None")
+            return
+        
+        if self.plot_modal:
+            print('plot modal instance already exist')
+            return
+        
+        self.plot_modal = PlotModal(self, self.port_listener)
         
     def _build_navbar(self):
         navbar = ttk.Frame(self)
@@ -267,7 +281,12 @@ class MainWindow(tk.Tk):
             self._update_status('Error: self.reader is not set')
             return
         
+        if self.port_listener is None:
+            self.port_listener = FakePortListener('some_port_id')
+        
+        self.port_listener.start()
         self._update_status('Start')
+        self.open_plot_modal()
         current = self.progress_var.get()
         total = self.reader.get_duration()
 
@@ -301,11 +320,17 @@ class MainWindow(tk.Tk):
     
     def _pause(self):
         self._update_status('Paused')
+        self.port_listener.pause()
     
     def _stop(self):
         self._update_status('Stopped')
         self.progress_var.set(0)
         self._current_index = 0
+        self.port_listener.stop()
+        self.port_listener = None
+        if self.plot_modal is not None:
+            self.plot_modal.destroy()
+            self.plot_modal = None
         
             
     def _update_status(self, message):
