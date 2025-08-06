@@ -17,6 +17,10 @@ class DWReader:
             for channel in reader.channels
             if channel.number_of_samples > 0 and channel.number_of_samples == signal_length
         }
+        for _ in range(start_index):
+            for gen in generators.values():
+                next(gen)
+                
         while True:
             chunks = {}
             for name, gen in generators.items():

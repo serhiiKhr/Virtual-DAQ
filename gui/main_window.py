@@ -47,6 +47,8 @@ class MainWindow(tk.Tk):
         self.pause_state = False
         self.stop_state = False
         
+        self._current_index = 0
+        
         self.build_ui()
         
     def build_ui(self):
@@ -267,31 +269,34 @@ class MainWindow(tk.Tk):
         
         self._update_status('Start')
         current = self.progress_var.get()
-        print('current', current)
         total = self.reader.get_duration()
-        print('total', total)
+
         sampling_rate = self.reader.get_sampling_rate()
         delay = float(self.delay.get())
         delay_sec = delay / 1000.0
         
         chunk_size = int(sampling_rate * delay_sec)
-        for index, chunk in enumerate(self.reader.data_generator(chunk_size=chunk_size)):
+        
+        for i, chunk in enumerate(self.reader.data_generator(chunk_size=chunk_size, start_index=self._current_index)):
+            # index = 
             if self.stop_state:
                 self.progress_var.set(0)
+                self._current_index = 0
                 break
             
             if self.pause_state:
+                self._current_index += i
                 break
         
-            percent = ((current + delay_sec * index) / total) * 100
+            percent = ((self._current_index + i) * delay_sec / total) * 100
+            # SEND_DATA_METHOD(chunk)
             self.progress_var.set(percent)
             self.progressbar.update()
             
         if not self.pause_state and not self.stop_state:
             self._on_control_click('stop')
             self._update_status('Completed')
-
-       
+            self._current_index = 0
             
     
     def _pause(self):
@@ -300,6 +305,8 @@ class MainWindow(tk.Tk):
     def _stop(self):
         self._update_status('Stopped')
         self.progress_var.set(0)
+        self._current_index = 0
+        
             
     def _update_status(self, message):
         self.status_var.set(message)
