@@ -1,1 +1,2 @@
 from .fake_port_listener import FakePortListener
+from .com_port_sender import ComPortSender

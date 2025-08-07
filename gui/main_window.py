@@ -1,10 +1,12 @@
 import tkinter as tk
+import serial
+from serial.tools import list_ports
 from tkinter import ttk, filedialog
 import random
 
 from reader import upload_file
 from .modals import SettingsModal, PlotModal
-from ports import FakePortListener
+from ports import FakePortListener, ComPortSender
 
 """
 +---------------------------------------------+
@@ -23,7 +25,8 @@ from ports import FakePortListener
 """
 METHODS = ["Serial", "Modbus TCP"]
 FROM_COM_PORTS = ["COM1", "COM2", "COM3"]
-TO_COM_PORTS = ["COM4", "COM5", "COM6"]
+TO_COM_PORTS = [port.device for port in list_ports.comports()]
+# ["COM4", "COM5", "COM6"]
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -51,7 +54,7 @@ class MainWindow(tk.Tk):
         
         self._current_index = 0
         
-        self.port_listener = None
+        self.com_port_sender = None
         self.plot_modal = None
         self.build_ui()
         
@@ -69,14 +72,17 @@ class MainWindow(tk.Tk):
     def open_settings_modal(self):
         SettingsModal(self)
         
-    def open_plot_modal(self):
-        if not self.port_listener:
-            print("plot listener is couldn't be None")
-            return
+    def init_port_sender(self):
+        if self.com_port_sender:
+            print('port sender already exist')
+            return 
+        self.com_port_sender = ComPortSender(to_port=self.to_com.get())
         
+    def open_plot_modal(self):
         if self.plot_modal:
             print('plot modal instance already exist')
             return
+        
         filename = ''
         if self.reader:
             filepath = self.reader.filepath 
@@ -285,13 +291,11 @@ class MainWindow(tk.Tk):
             self._update_status('Error: self.reader is not set')
             return
         
-        if self.port_listener is None:
-            self.port_listener = FakePortListener('some_port_id')
+
+        self.init_port_sender()
         
-        self.port_listener.start()
         self._update_status('Start')
         self.open_plot_modal()
-        current = self.progress_var.get()
         total = self.reader.get_duration()
 
         sampling_rate = self.reader.get_sampling_rate()
@@ -305,6 +309,7 @@ class MainWindow(tk.Tk):
             if self.stop_state:
                 self.progress_var.set(0)
                 self._current_index = 0
+                self.com_port_sender.close()
                 break
             
             if self.pause_state:
@@ -313,6 +318,7 @@ class MainWindow(tk.Tk):
         
             percent = ((self._current_index + i) * delay_sec / total) * 100
             # SEND_DATA_METHOD(chunk)
+            self.com_port_sender.send(data=chunk)
             self.plot_modal.update_data(chunk)
             self.progress_var.set(percent)
             self.progressbar.update()
@@ -321,18 +327,23 @@ class MainWindow(tk.Tk):
             self._on_control_click('stop')
             self._update_status('Completed')
             self._current_index = 0
+            # self.progressbar.update()
+            
+        print('finished')
             
     
     def _pause(self):
         self._update_status('Paused')
-        self.port_listener.pause()
     
     def _stop(self):
         self._update_status('Stopped')
         self.progress_var.set(0)
         self._current_index = 0
-        self.port_listener.stop()
-        self.port_listener = None
+        
+        if self.com_port_sender is not None:
+            self.com_port_sender.close()
+            self.com_port_sender = None
+        
         if self.plot_modal is not None:
             self.plot_modal.close()
             self.plot_modal = None
